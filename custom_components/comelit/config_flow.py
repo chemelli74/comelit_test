@@ -40,8 +40,8 @@ USER_SCHEMA = vol.Schema(
 STEP_REAUTH_DATA_SCHEMA = vol.Schema({vol.Required(CONF_PIN): cv.string})
 STEP_RECONFIGURE = vol.Schema(
     {
-        vol.Required(CONF_HOST): cv.string,
-        vol.Required(CONF_PORT): cv.port,
+        vol.Required(CONF_HOST, default=DEFAULT_HOST): cv.string,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
         vol.Optional(CONF_PIN, default=DEFAULT_PIN): cv.string,
         vol.Optional(CONF_VEDO_PIN): cv.string,
     }
@@ -90,20 +90,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             assert isinstance(api, ComeliteSerialBridgeApi)
 
         # Verify VEDO is enabled with the provided PIN
-        try:
-            if not await api.vedo_enabled(data[CONF_VEDO_PIN]):
-                raise InvalidVedoAuth
-        except (aiocomelit_exceptions.CannotConnect, TimeoutError) as err:
-            raise CannotConnect(
-                translation_domain=DOMAIN,
-                translation_key="cannot_connect",
-                translation_placeholders={"error": repr(err)},
-            ) from err
-        except aiocomelit_exceptions.CannotAuthenticate:
-            raise InvalidVedoAuth(
-                translation_domain=DOMAIN,
-                translation_key="invalid_vedo_auth",
-            ) from None
+        if not await api.vedo_enabled(data[CONF_VEDO_PIN]):
+            raise InvalidVedoAuth
 
     return {"title": data[CONF_HOST]}
 

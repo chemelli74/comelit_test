@@ -2,13 +2,9 @@
 
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
-from typing import Any, Concatenate, Literal
+from typing import TYPE_CHECKING, Any, Concatenate
 
-from aiocomelit.api import (
-    ComelitSerialBridgeObject,
-    ComelitVedoAreaObject,
-    ComelitVedoZoneObject,
-)
+from aiocomelit.api import ComelitSerialBridgeObject
 from aiocomelit.exceptions import CannotAuthenticate, CannotConnect, CannotRetrieveData
 from aiohttp import ClientSession, CookieJar
 
@@ -22,11 +18,9 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from .const import _LOGGER, DOMAIN
+from .const import _LOGGER, DOMAIN, DeviceType
 from .coordinator import ComelitBaseCoordinator
 from .entity import ComelitBridgeBaseEntity
-
-DeviceType = ComelitSerialBridgeObject | ComelitVedoAreaObject | ComelitVedoZoneObject
 
 
 async def async_client_session(hass: HomeAssistant) -> ClientSession:
@@ -125,14 +119,7 @@ def bridge_api_call[_T: ComelitBridgeBaseEntity, **_P](
 def new_device_listener(
     coordinator: ComelitBaseCoordinator,
     new_devices_callback: Callable[
-        [
-            list[
-                ComelitSerialBridgeObject
-                | ComelitVedoAreaObject
-                | ComelitVedoZoneObject
-            ],
-            str,
-        ],
+        [list[DeviceType], str],
         None,
     ],
     data_type: str,
@@ -142,8 +129,8 @@ def new_device_listener(
 
     def _check_devices() -> None:
         """Check for new devices and call callback with any new monitors."""
-        if not coordinator.data:
-            return
+        if TYPE_CHECKING:
+            assert coordinator.data
 
         new_devices: list[DeviceType] = []
         for _id in coordinator.data[data_type]:
@@ -158,35 +145,3 @@ def new_device_listener(
     _check_devices()
 
     return coordinator.async_add_listener(_check_devices)
-
-
-def alarm_device_listener(
-    coordinator: ComelitBaseCoordinator,
-    new_devices_callback: Callable[
-        [list[DeviceType], str],
-        None,
-    ],
-    data_type: Literal["alarm_areas", "alarm_zones"],
-) -> Callable[[], None]:
-    """Subscribe to coordinator updates to check for new alarm devices on bridge."""
-    known_devices: dict[str, list[int]] = {}
-
-    def _check_alarm_devices() -> None:
-        """Check for new alarm devices and call callback with any new devices."""
-        # For ComelitSerialBridge with alarm_data
-        if not hasattr(coordinator, "alarm_data") or not coordinator.alarm_data:
-            return
-
-        new_devices: list[DeviceType] = []
-        for _id in coordinator.alarm_data[data_type]:
-            if _id not in (id_list := known_devices.get(data_type, [])):
-                known_devices.update({data_type: [*id_list, _id]})
-                new_devices.append(coordinator.alarm_data[data_type][_id])
-
-        if new_devices:
-            new_devices_callback(new_devices, data_type)
-
-    # Check for devices immediately
-    _check_alarm_devices()
-
-    return coordinator.async_add_listener(_check_alarm_devices)

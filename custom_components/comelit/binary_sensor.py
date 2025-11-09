@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 from aiocomelit.api import ComelitVedoZoneObject
-from aiocomelit.const import BRIDGE, AlarmZoneState
+from aiocomelit.const import ALARM_ZONE, BRIDGE, AlarmZoneState
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -22,7 +22,7 @@ from .coordinator import (
     ComelitSerialBridge,
     ComelitVedoSystem,
 )
-from .utils import DeviceType, alarm_device_listener
+from .utils import DeviceType, new_device_listener
 
 # Coordinator is used to centralize the data updates
 PARALLEL_UPDATES = 0
@@ -38,31 +38,25 @@ async def async_setup_entry(
     coordinator: ComelitBaseCoordinator
     if config_entry.data.get(CONF_TYPE, BRIDGE) == BRIDGE:
         coordinator = cast(ComelitSerialBridge, config_entry.runtime_data)
-        # Only setup if bridge has VEDO alarm enabled
-        if not coordinator.vedo_pin:
-            return
     else:
         coordinator = cast(ComelitVedoSystem, config_entry.runtime_data)
 
-    if (data := coordinator.alarm_data) is None:
-        return
-
-    def _add_new_entities(new_objects: list[DeviceType], dev_type: str) -> None:
+    def _add_new_entities(new_devices: list[DeviceType], dev_type: str) -> None:
         """Add entities for new monitors."""
         entities = [
-            ComelitBinarySensorEntity(coordinator, zone, config_entry.entry_id)
-            for zone in data["alarm_zones"].values()
-            # if zone.index in new_objects
+            ComelitVedoBinarySensorEntity(coordinator, device, config_entry.entry_id)
+            for device in coordinator.data[dev_type].values()
+            if device in new_devices
         ]
         if entities:
             async_add_entities(entities)
 
     config_entry.async_on_unload(
-        alarm_device_listener(coordinator, _add_new_entities, "alarm_zones")
+        new_device_listener(coordinator, _add_new_entities, ALARM_ZONE)
     )
 
 
-class ComelitBinarySensorEntity(
+class ComelitVedoBinarySensorEntity(
     CoordinatorEntity[ComelitVedoSystem | ComelitSerialBridge], BinarySensorEntity
 ):
     """Sensor device."""
@@ -83,14 +77,13 @@ class ComelitBinarySensorEntity(
         # because no serial number or mac is available
         self._attr_unique_id = f"{config_entry_entry_id}-presence-{zone.index}"
         self._attr_device_info = coordinator.platform_device_info(zone, "zone")
-        assert self.coordinator.alarm_data is not None
 
     @property
     def _zone(self) -> ComelitVedoZoneObject:
         """Return zone object."""
-        if not self.coordinator.alarm_data:
-            raise RuntimeError("Alarm data not available")
-        return self.coordinator.alarm_data["alarm_zones"][self._zone_index]
+        return cast(
+            ComelitVedoZoneObject, self.coordinator.data[ALARM_ZONE][self._zone_index]
+        )
 
     @property
     def available(self) -> bool:
@@ -106,10 +99,4 @@ class ComelitBinarySensorEntity(
     @property
     def is_on(self) -> bool:
         """Presence detected."""
-        if not self.coordinator.alarm_data:
-            raise RuntimeError("Alarm data not available")
-
-        return (
-            self.coordinator.alarm_data["alarm_zones"][self._zone_index].status_api
-            == "0001"
-        )
+        return self._zone.status_api == "0001"

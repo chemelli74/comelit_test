@@ -37,19 +37,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ComelitConfigEntry) -> b
     session = await async_client_session(hass)
 
     if entry.data.get(CONF_TYPE, BRIDGE) == BRIDGE:
+        vedo_pin = entry.data.get(CONF_VEDO_PIN)
         coordinator = ComelitSerialBridge(
             hass,
             entry,
             entry.data[CONF_HOST],
             entry.data.get(CONF_PORT, DEFAULT_PORT),
             entry.data[CONF_PIN],
-            entry.data.get(CONF_VEDO_PIN),
+            vedo_pin,
             session,
         )
-        platforms = list(BRIDGE_PLATFORMS)
+        platforms = BRIDGE_PLATFORMS
         # Add VEDO platforms if vedo_pin is configured
-        if entry.data.get(CONF_VEDO_PIN):
-            platforms.extend(VEDO_PLATFORMS)
+        if vedo_pin:
+            platforms = list(set(platforms + VEDO_PLATFORMS))
     else:
         coordinator = ComelitVedoSystem(
             hass,
@@ -74,10 +75,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ComelitConfigEntry) -> 
     """Unload a config entry."""
 
     if entry.data.get(CONF_TYPE, BRIDGE) == BRIDGE:
-        platforms = list(BRIDGE_PLATFORMS)
+        platforms = BRIDGE_PLATFORMS
         # Add VEDO platforms if vedo_pin was configured
         if entry.data.get(CONF_VEDO_PIN):
-            platforms.extend(VEDO_PLATFORMS)
+            platforms = list(set(platforms + VEDO_PLATFORMS))
     else:
         platforms = VEDO_PLATFORMS
 

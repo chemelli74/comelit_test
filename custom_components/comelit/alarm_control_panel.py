@@ -6,7 +6,7 @@ import logging
 from typing import cast
 
 from aiocomelit.api import ComelitVedoAreaObject
-from aiocomelit.const import BRIDGE, AlarmAreaState
+from aiocomelit.const import ALARM_AREA, BRIDGE, AlarmAreaState
 
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
@@ -65,16 +65,13 @@ async def async_setup_entry(
     coordinator: ComelitBaseCoordinator
     if config_entry.data.get(CONF_TYPE, BRIDGE) == BRIDGE:
         coordinator = cast(ComelitSerialBridge, config_entry.runtime_data)
-        # Only setup if bridge has VEDO alarm enabled
-        if not coordinator.vedo_pin:
-            return
     else:
         coordinator = cast(ComelitVedoSystem, config_entry.runtime_data)
 
-    if data := coordinator.alarm_data:
+    if data := coordinator.data[ALARM_AREA]:
         async_add_entities(
-            ComelitAlarmEntity(coordinator, area, config_entry.entry_id)
-            for area in data["alarm_areas"].values()
+            ComelitAlarmEntity(coordinator, device, config_entry.entry_id)
+            for device in data.values()
         )
 
 
@@ -111,9 +108,9 @@ class ComelitAlarmEntity(
     @property
     def _area(self) -> ComelitVedoAreaObject:
         """Return area object."""
-        if not self.coordinator.alarm_data:
-            raise RuntimeError("Alarm data not available")
-        return self.coordinator.alarm_data["alarm_areas"][self._area_index]
+        return cast(
+            ComelitVedoAreaObject, self.coordinator.data[ALARM_AREA][self._area_index]
+        )
 
     @property
     def available(self) -> bool:

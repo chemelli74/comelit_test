@@ -8,6 +8,7 @@
   "iot_class": "local_polling",
   "loggers": ["aiocomelit"],
   "quality_scale": "platinum",
-  "requirements": ["git+https://github.com/chemelli74/aiocomelit.git@refs/pull/344/head#aiocomelit==1.1.3"],
-  "version": "2025.12.0b1"
+  "requirements": [
+    "git+https://github.com/chemelli74/aiocomelit.git@chemelli74-align-alarm-data#aiocomelit==2.0.0"
+  ]
 }
